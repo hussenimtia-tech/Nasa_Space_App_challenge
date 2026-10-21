@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>iOS App Showcase – Places & Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&display=swap" rel="stylesheet" />
+  <style>
+    @font-face {
+      font-family: 'ITC Garamond Std Narrow';
+      font-weight: 300; font-style: normal; font-display: swap;
+      src: url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-LtNarrow_i2zcip.woff2') format('woff2'),
+           url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-LtNarrow_soc5vc.woff') format('woff');
+    }
+    @font-face {
+      font-family: 'ITC Garamond Std Narrow';
+      font-weight: 400; font-style: normal; font-display: swap;
+      src: url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-BkNarrow_xjfoc0.woff2') format('woff2'),
+           url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-BkNarrow_wfoxm1.woff') format('woff');
+    }
+    @font-face {
+      font-family: 'ITC Garamond Std Narrow';
+      font-weight: 400; font-style: italic; font-display: swap;
+      src: url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-BkNarrowIta_hiy9ld.woff2') format('woff2'),
+           url('https://res.cloudinary.com/dgupuutfn/raw/upload/v1783596334/ITCGaramondStd-BkNarrowIta_rlarxo.woff') format('woff');
+    }
+
+    :root {
+      --garamond: 'ITC Garamond Std Narrow', 'Playfair Display', Georgia, serif;
+      --inter: 'Inter', system-ui, sans-serif;
+      --helvetica: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --sf: -apple-system, 'SF Pro Text', 'SF Pro', system-ui, sans-serif;
+      --expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { background: #f4f4f4; overflow: hidden; -webkit-font-smoothing: antialiased; }
+
+    /* ── stage ── */
+    .viewport { position: fixed; inset: 0; padding: 40px; display: flex; align-items: center; justify-content: center; }
+    .stage { display: flex; gap: 70px; transform-origin: center center; flex: none; }
+
+    /* ── iOS device frame ── */
+    .device {
+      position: relative; width: 370px; height: 790px; border-radius: 48px; overflow: hidden; flex: none;
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.12);
+    }
+    .device.light { background: #f2f2f7; }
+    .device.dark { background: #000; }
+    .island { position: absolute; top: 11px; left: 50%; width: 126px; height: 37px; margin-left: -63px; border-radius: 24px; background: #000; z-index: 20; }
+    .status { position: absolute; top: 0; left: 0; right: 0; height: 54px; z-index: 19; display: flex; align-items: center; justify-content: space-between; padding: 4px 34px 0 46px; color: #fff; pointer-events: none; }
+    .status time { font-family: var(--sf); font-weight: 590; font-size: 17px; letter-spacing: -0.2px; }
+    .status .icons { display: flex; align-items: center; gap: 6px; }
+    .home-bar { position: absolute; bottom: 8px; left: 50%; width: 139px; height: 5px; margin-left: -69.5px; border-radius: 100px; z-index: 20; }
+    .light .home-bar { background: rgba(0, 0, 0, 0.25); }
+    .dark .home-bar { background: rgba(255, 255, 255, 0.7); }
+
+    /* ── Screen 1: The place for all your places ── */
+    .s1 { position: absolute; inset: 0; background: #02040c; overflow: hidden; }
+    .s1-native { position: absolute; left: 0; top: 0; width: 470px; height: 1008px; transform: scale(0.787234); transform-origin: top left; }
+    .s1-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 48%; z-index: 0; }
+    .s1-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; z-index: 1; background: linear-gradient(to bottom, rgba(2, 4, 12, 0) 0%, rgba(2, 4, 12, 0.35) 46%, rgba(2, 4, 12, 0.72) 100%); }
+    .s1-logo { position: absolute; top: 74px; left: 50%; width: 118px; margin-left: -59px; filter: drop-shadow(0 0 7px rgba(190, 215, 255, 0.28)); z-index: 4; }
+    .s1-title {
+      position: absolute; top: 618px; left: 0; right: 0; margin: 0; text-align: center; z-index: 4; color: #fff;
+      font-family: var(--garamond); font-weight: 300; font-size: 66px; line-height: 68px; letter-spacing: 0.2px;
+      text-shadow: 0 0 34px rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .s1-title em {
+      font-style: italic; font-weight: 400;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.6), 0 0 20px rgba(255, 235, 190, 0.5), 0 0 40px rgba(255, 210, 140, 0.32), 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .s1-sub { position: absolute; top: 787px; left: 0; right: 0; margin: 0; text-align: center; z-index: 4; font-family: var(--inter); font-size: 16.5px; font-weight: 400; line-height: 26px; color: rgba(255, 255, 255, 0.52); }
+    .s1-btn {
+      position: absolute; top: 874px; left: 32px; width: 406px; height: 55px; z-index: 4; border: 0; border-radius: 28px; background: #fff;
+      box-shadow: 0 6px 26px rgba(0, 0, 0, 0.28); display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+      font-family: var(--helvetica); font-size: 18px; font-weight: 500; color: #1a1a1a; -webkit-text-stroke: 0.6px #1a1a1a;
+    }
+    .s1-btn svg { width: 18px; height: 21px; fill: #1a1a1a; margin-top: -3px; }
+    .s1-terms { position: absolute; top: 950px; left: 0; right: 0; margin: 0; text-align: center; z-index: 4; font-family: var(--inter); font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, 0.42); }
+    .s1-terms b { font-weight: 400; color: rgba(255, 255, 255, 0.82); }
+
+    /* ── Screen 2: Unlock Pro ── */
+    .s2 { position: absolute; inset: 0; background: #14151d; overflow: hidden; font-family: var(--inter); color: #fff; }
+    .s2-video { position: absolute; left: 0; top: -30%; width: 370px; height: 790px; object-fit: cover; z-index: 0; }
+    .s2-fade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgba(20, 21, 29, 0) 0%, rgba(20, 21, 29, 0) 40%, rgba(20, 21, 29, 0.55) 55%, rgba(20, 21, 29, 0.92) 66%, #14151d 74%, #14151d 100%); }
+    .s2 > .abs { position: absolute; z-index: 3; }
+    .s2-heading { left: 28px; top: 386px; margin: 0; font-family: var(--garamond); font-weight: 500; font-size: 26px; line-height: 1; letter-spacing: 0.2px; color: #fff; text-shadow: 0 0 18px rgba(120, 180, 220, 0.35); }
+    .s2-divider { left: 28px; top: 418px; width: 265px; height: 1px; background: linear-gradient(to right, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.3) 70%, rgba(255, 255, 255, 0) 100%); transform-origin: left center; }
+    .s2-list { left: 28px; top: 429px; width: 314px; margin: 0; padding: 0; list-style: none; }
+    .s2-list li { height: 24px; display: flex; align-items: center; font-size: 13.5px; font-weight: 400; color: #fff; }
+    .s2-list .ic { width: 22px; display: flex; align-items: center; justify-content: center; flex: none; }
+    .s2-list svg { width: 19px; height: 19px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .s2-list svg.inf { width: 20px; height: 20px; }
+    .s2-list span.t { margin-left: 4px; }
+    .s2-cards { left: 28px; top: 561px; width: 314px; height: 123px; }
+    .card { position: absolute; top: 0; height: 123px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.11); padding: 14px 14px 15px 15px; }
+    .card .label { font-size: 13px; font-weight: 400; }
+    .card .price { font-size: 19px; font-weight: 500; margin-top: 6px; letter-spacing: 0.3px; }
+    .card .billed { position: absolute; left: 15px; bottom: 15px; font-size: 12px; }
+    .card.monthly { left: 0; width: 144px; background: url('https://polo-pecan-73837341.figma.site/_assets/v11/ef4533e6536f2495088e56e0f98036b5ff15446d.png') center / cover no-repeat; }
+    .card.monthly * { color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
+    .card.yearly { left: 154px; width: 160px; background: #1e212a; }
+    .card.yearly .label, .card.yearly .billed { color: rgba(255, 255, 255, 0.5); }
+    .card.yearly .price { color: rgba(255, 255, 255, 0.62); }
+    .save { position: absolute; left: 15px; top: 66px; display: inline-flex; padding: 5px 8px; border-radius: 11px; background: #4d5057; font-size: 10.5px; font-weight: 600; color: rgba(255, 255, 255, 0.65); letter-spacing: 0.2px; line-height: 1; }
+    .s2-subscribe {
+      left: 28px; top: 709px; width: 314px; height: 50px; border: 0; border-radius: 26px; background: #fff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--helvetica); font-size: 16px; font-weight: 500; color: #0c0c0e; -webkit-text-stroke: 0.4px #0c0c0e;
+    }
+    .s2-subscribe svg { position: absolute; right: 24px; top: 50%; width: 9px; height: 15px; margin-top: -7.5px; fill: none; stroke: #0c0c0e; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── Entrance animations (paused until .ze-ready) ── */
+    @keyframes zeBgSettle { from { transform: scale(1.12); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes zeReveal { from { transform: translateY(26px) scale(0.985); filter: blur(7px); opacity: 0; } to { transform: none; filter: blur(0); opacity: 1; } }
+    @keyframes zeDrop { from { transform: translateY(-16px) scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes zeLine { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes zePop { 0% { transform: translateY(8px) scale(0.78); opacity: 0; } 60% { transform: translateY(0) scale(1.07); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+    .ze { animation-duration: 0.9s; animation-timing-function: var(--expo); animation-fill-mode: both; animation-play-state: paused; }
+    .viewport.ze-ready .ze { animation-play-state: running; }
+    .ze-bg { animation-name: zeBgSettle; animation-duration: 1.7s; }
+    .ze-reveal { animation-name: zeReveal; }
+    .ze-drop { animation-name: zeDrop; }
+    .ze-line { animation-name: zeLine; }
+    .ze-pop { animation-name: zePop; animation-duration: 0.7s; animation-timing-function: var(--spring); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ze { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
+
+      <!-- ═════════ Screen 1 — Light device frame ═════════ -->
+      <div class="device light" aria-label="The place for all your places – welcome screen">
+        <div class="island"></div>
+        <div class="status">
+          <time>11:11</time>
+          <span class="icons">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="#fff" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 4.2a10 10 0 0 1 14 0"/><path d="M3.4 6.7a6.6 6.6 0 0 1 9.2 0"/><path d="M5.8 9.1a3.2 3.2 0 0 1 4.4 0"/><circle cx="8" cy="11" r="0.9" fill="#fff" stroke="none"/></svg>
+            <svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.5" y="0.5" width="23" height="12" rx="3.8" fill="none" stroke="#fff" stroke-opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2.4" fill="#fff"/><path d="M25 4.5v4c.8-.3 1.4-1.1 1.4-2s-.6-1.7-1.4-2z" fill="#fff" fill-opacity=".45"/></svg>
+          </span>
+        </div>
+
+        <div class="s1">
+          <div class="s1-native">
+            <video class="s1-video ze ze-bg" id="v1" style="animation-delay:0s" autoplay loop muted playsinline
+              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260710_114906_ad7cee37-9e56-434f-99bc-92d5bdc4f9fe.mp4"></video>
+            <div class="s1-fade"></div>
+            <img class="s1-logo ze ze-drop" style="animation-delay:.45s" src="https://polo-pecan-73837341.figma.site/_assets/v11/b1ddc82509144261f1999a0c4d92be5ce6689c0f.png" alt="Logo" />
+            <h1 class="s1-title ze ze-reveal" style="animation-delay:.62s">The place for all<br /><em>your places</em></h1>
+            <p class="s1-sub ze ze-reveal" style="animation-delay:.78s">Save, Organize and Share your favorite places</p>
+            <button class="s1-btn ze ze-reveal" style="animation-delay:.94s" type="button">
+              <svg viewBox="0 0 22 25" aria-hidden="true"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/></svg>
+              Continue with Apple
+            </button>
+            <p class="s1-terms ze ze-reveal" style="animation-delay:1.06s">By continuing, you agree to <b>Terms of Use</b></p>
+          </div>
+        </div>
+        <div class="home-bar"></div>
+      </div>
+
+      <!-- ═════════ Screen 2 — Dark device frame ═════════ -->
+      <div class="device dark" aria-label="Unlock Pro – subscription screen">
+        <div class="island"></div>
+        <div class="status">
+          <time>11:11</time>
+          <span class="icons">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="#fff" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 4.2a10 10 0 0 1 14 0"/><path d="M3.4 6.7a6.6 6.6 0 0 1 9.2 0"/><path d="M5.8 9.1a3.2 3.2 0 0 1 4.4 0"/><circle cx="8" cy="11" r="0.9" fill="#fff" stroke="none"/></svg>
+            <svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.5" y="0.5" width="23" height="12" rx="3.8" fill="none" stroke="#fff" stroke-opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2.4" fill="#fff"/><path d="M25 4.5v4c.8-.3 1.4-1.1 1.4-2s-.6-1.7-1.4-2z" fill="#fff" fill-opacity=".45"/></svg>
+          </span>
+        </div>
+
+        <div class="s2">
+          <video class="s2-video ze ze-bg" id="v2" style="animation-delay:.12s" autoplay loop muted playsinline
+            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260710_115050_a1ba47d0-aedf-413c-9dea-14509599d3dd.mp4"></video>
+          <div class="s2-fade"></div>
+
+          <h2 class="abs s2-heading ze ze-reveal" style="animation-delay:.58s">Unlock Pro:</h2>
+          <div class="abs s2-divider ze ze-line" style="animation-delay:.72s"></div>
+
+          <ul class="abs s2-list">
+            <li class="ze ze-reveal" style="animation-delay:.80s">
+              <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg></span><span class="t">Create private Guides</span>
+            </li>
+            <li class="ze ze-reveal" style="animation-delay:.88s">
+              <span class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/></svg></span><span class="t">Import from social media</span>
+            </li>
+            <li class="ze ze-reveal" style="animation-delay:.96s">
+              <span class="ic"><svg class="inf" viewBox="0 0 24 24"><path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.988-8-13.083-8-5.096 0-5.096 8 0 8 5.095 0 7.988-8 13.083-8z"/></svg></span><span class="t">Unlimited Guides</span>
+            </li>
+            <li class="ze ze-reveal" style="animation-delay:1.04s">
+              <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3c.4 3.6 1.4 4.6 5 5-3.6.4-4.6 1.4-5 5-.4-3.6-1.4-4.6-5-5 3.6-.4 4.6-1.4 5-5Z"/></svg></span><span class="t">AI search</span>
+            </li>
+            <li class="ze ze-reveal" style="animation-delay:1.12s">
+              <span class="ic"><svg viewBox="0 0 24 24"><circle cx="8.5" cy="8" r="3"/><path d="M3 19.5c0-3.1 2.5-5.5 5.5-5.5s5.5 2.4 5.5 5.5"/><path d="M15.5 5.2a2.8 2.8 0 0 1 0 5.6"/><path d="M17 14.2c2.4.5 4 2.6 4 5.3"/></svg></span><span class="t">Collaborate with friends</span>
+            </li>
+          </ul>
+
+          <div class="abs s2-cards">
+            <div class="card monthly ze ze-reveal" style="animation-delay:1.22s">
+              <div class="label">Monthly</div>
+              <div class="price">$20</div>
+              <div class="billed">Billed Monthly</div>
+            </div>
+            <div class="card yearly ze ze-reveal" style="animation-delay:1.30s">
+              <div class="label">Yearly</div>
+              <div class="price">$200</div>
+              <span class="save ze ze-pop" style="animation-delay:1.55s">Save $40.00</span>
+              <div class="billed">Billed Yearly</div>
+            </div>
+          </div>
+
+          <button class="abs s2-subscribe ze ze-reveal" style="animation-delay:1.42s" type="button">
+            Subscribe
+            <svg viewBox="0 0 9 15" aria-hidden="true"><path d="M1.5 1.5 7 7.5 1.5 13.5"/></svg>
+          </button>
+        </div>
+        <div class="home-bar"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var viewport = document.getElementById('viewport');
+      var stage = document.getElementById('stage');
+
+      // Auto-scale the stage to fit the viewport
+      function fit() {
+        stage.style.transform = 'none';
+        var pad = 40 * 2;
+        var ratio = Math.min((window.innerWidth - pad) / stage.offsetWidth, (window.innerHeight - pad) / stage.offsetHeight);
+        stage.style.transform = 'scale(' + Math.min(1, ratio) * 0.95 + ')';
+      }
+      window.addEventListener('resize', fit);
+      fit();
+
+      // Gate entrance animations on both videos + fonts (5s safety timeout)
+      function videoReady(v) {
+        return new Promise(function (resolve) {
+          if (v.readyState >= 2) return resolve();
+          v.addEventListener('loadeddata', resolve, { once: true });
+          v.addEventListener('error', resolve, { once: true });
+        });
+      }
+      var done = false;
+      function go() {
+        if (done) return;
+        done = true;
+        viewport.classList.add('ze-ready');
+      }
+      Promise.all([
+        videoReady(document.getElementById('v1')),
+        videoReady(document.getElementById('v2')),
+        document.fonts ? document.fonts.ready : Promise.resolve(),
+      ]).then(go);
+      setTimeout(go, 5000);
+    })();
+  </script>
+  
+</body>
+</html>
