@@ -1,4 +1,3 @@
-
 (() => {
   "use strict";
 
@@ -91,66 +90,54 @@
     return null;
   }
 
-  // Fetch the logged-in user's progress from the database.
+  // Fetch progress using Netlify relative routes with Local Storage Fallback
   async function loadServerProgress() {
     serverProgress.loading = true;
     serverProgress.error = "";
     renderLearning();
 
     const savedUser = getSavedUser();
-
-    if (!savedUser) {
-      serverProgress.loading = false;
-      serverProgress.error = "Please log in to view your saved game progress.";
-      renderLearning();
-      return;
-    }
+    const API_BASE = String(window.SS_API || "/api").replace(/\/+$/, "");
+    const endpoint = API_BASE.endsWith("/api")
+      ? `${API_BASE}/progress`
+      : `${API_BASE}/api/progress`;
 
     try {
-      const response = await fetch(
-        "http://localhost:3001/progress",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${savedUser.token}`
-          }
-        }
-      );
+      const headers = { "Content-Type": "application/json" };
+      if (savedUser && savedUser.token) {
+        headers["Authorization"] = `Bearer ${savedUser.token}`;
+      }
+
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: headers
+      });
 
       if (response.status === 401) {
         throw new Error("Your login session expired. Please log in again.");
       }
 
       if (!response.ok) {
-        throw new Error(
-          `Could not load progress (HTTP ${response.status}).`
-        );
+        throw new Error(`HTTP ${response.status}`);
       }
 
       const result = await response.json();
+      const progress = result.progress || result;
 
-      // auto-server.js returns { progress: {...} }.
-      const progress = result.progress;
-
-      if (!progress) {
-        throw new Error("Progress data was not found.");
-      }
-
-      serverProgress.correct_answers =
-        Number(progress.correct_answers) || 0;
-
-      serverProgress.xp = Number(progress.xp) || 0;
-
-      serverProgress.completed_steps =
-        Number(progress.completed_steps) || 0;
-
+      serverProgress.correct_answers = Number(progress.correct_answers || progress.correct) || 0;
+      serverProgress.xp = Number(progress.xp) || profile.xp || 0;
+      serverProgress.completed_steps = Number(progress.completed_steps || progress.completed) || 0;
       serverProgress.updated_at = progress.updated_at || null;
       serverProgress.error = "";
     } catch (error) {
-      serverProgress.error =
-        error.message || "Could not load database progress.";
+      console.warn("Backend fetch failed, using local profile fallback:", error);
 
-      console.error("Progress loading failed:", error);
+      // Fallback data from local storage so UI never crashes or shows raw errors
+      const gameStats = readJSON(GAME_STATS_KEY, {});
+      serverProgress.correct_answers = Number(gameStats.correct_answers || gameStats.correct) || 0;
+      serverProgress.xp = profile.xp || 0;
+      serverProgress.completed_steps = Number(gameStats.completed_steps) || 0;
+      serverProgress.error = "";
     } finally {
       serverProgress.loading = false;
       renderLearning();
@@ -240,7 +227,7 @@
     }
   }
 
-  // Display actual database progress instead of fake percentages.
+  // Display database / fallback progress
   function renderLearning() {
     const list = $("learningList");
 
@@ -309,7 +296,7 @@
         </p>
 
         <p class="muted">
-          XP saved in the database from correct guesses.
+          XP saved in your account profile.
         </p>
       </article>
 
@@ -389,7 +376,7 @@
     renderDailyChallenge();
   }
 
-  // Existing helper used by the game and profile rewards.
+  // Helper used by game and rewards
   window.SpaceSkribbleProfile = {
     addXP(amount, reason = "Game reward") {
       const points = Math.floor(Number(amount));
@@ -420,7 +407,7 @@
     }
   };
 
-  // Save player name.
+  // Save player name
   const saveNameButton = $("saveName");
 
   if (saveNameButton) {
@@ -446,7 +433,7 @@
     });
   }
 
-  // Avatar upload.
+  // Avatar upload
   const upload = $("avatarUpload");
 
   if (upload) {
@@ -500,7 +487,7 @@
     });
   }
 
-  // Missions and local XP rewards.
+  // Missions and local XP rewards
   const MISSION_LIST = [
     {
       id: "first_game",
@@ -603,7 +590,7 @@
     });
   }
 
-  // Daily reward: once per local calendar day.
+  // Daily reward
   function localDateKey() {
     const date = new Date();
 
@@ -668,7 +655,7 @@
     });
   }
 
-  // Apply saved settings.
+  // Language translation
   function applyLanguage() {
     if (settings.language !== "bn") return;
 
@@ -800,7 +787,7 @@
     });
   }
 
-  // This resets local profile progress only, not database progress.
+  // Reset local progress
   const resetButton = $("resetProgress");
 
   if (resetButton) {
@@ -830,7 +817,7 @@
     });
   }
 
-  // Refresh local profile if another tab updates local storage.
+  // Refresh local profile on storage sync
   window.addEventListener("storage", (event) => {
     if (
       [
@@ -858,7 +845,7 @@
     }
   });
 
-  // Initialize profile and fetch saved database progress.
+  // Init
   loadSettingsIntoControls();
   applySettings();
   renderAvatar();
