@@ -1,7 +1,7 @@
 /*
  * SpaceSkribble – auth flow
  * Flow: login.html -> (no account?) register.html -> auto login -> index.html
- * Works with auto-server.js (POST /register, POST /login on port 3001).
+ * Works with auto-server.js (POST /register, POST /login).
  * Token is saved in localStorage under "spaceSkribbleUser" (same key app.js / profile.js read).
  */
 (() => {
@@ -10,11 +10,12 @@
   // ---- settings -------------------------------------------------------
   const REQUIRE_LOGIN = true; // false = guests may open index.html without logging in
   const KEY = 'spaceSkribbleUser';
-  const API =
-    window.SS_API ||
-    (location.protocol === 'file:'
-      ? 'http://localhost:3001'
-      : `${location.protocol}//${location.hostname}:3001`);
+
+  const isLocalHost = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
+
+  // js/config.js e window.SS_API set kora thakle seta, na hole sudhu localhost e :3001 use hobe.
+  // Netlify/online e SS_API khali thakle kono guess kora hobe na (guess korle "Failed to fetch" ashto).
+  const API = (window.SS_API || (isLocalHost ? 'http://localhost:3001' : '')).replace(/\/+$/, '');
 
   const file = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
   const isLoginPage = file === 'login.html';
@@ -115,17 +116,35 @@
     if (label) btn.textContent = label;
   }
 
+  // Render free plan e server ghumiye thakle prothom request e 30-60 sec lagte pare, tai timeout boro.
+  const TIMEOUT_MS = 60000;
+
   async function api(path, body) {
+    if (!API) {
+      throw new Error('Server URL set kora nai. js/config.js e window.SS_API te tomar hosted server er URL boshao.');
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     let res;
     try {
       res = await fetch(API + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
-    } catch {
-      throw new Error('Cannot reach the server. Start it with: node auto-server.js (port 3001).');
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') {
+        throw new Error('Server respond korte onek somoy nicche. Ektu pore abar try koro.');
+      }
+      throw new Error(
+        isLocalHost
+          ? 'Cannot reach the server. Start it with: node auto-server.js (port 3001).'
+          : 'Server e connect hocche na. Server ta cholche kina ar CORS allow kora ache kina check koro.'
+      );
     }
+    clearTimeout(timer);
     let data = {};
     try { data = await res.json(); } catch {}
     if (!res.ok) {
@@ -145,7 +164,7 @@
       const password = $('login-password').value;
       if (!email || !password) return say('Enter your email and password.');
       busy(loginForm, true, 'Logging in…');
-      say('Checking your account…', true);
+      say('Checking your account… (server ghumale 30-60 sec lagte pare)', true);
       try {
         const data = await api('/login', { email, password });
         saveUser(data.token, data.user);
@@ -173,7 +192,7 @@
       if (!name || !email || !password || !question || !answer) return say('Fill in all fields.');
       if (password.length < 6) return say('Password must be at least 6 characters.');
       busy(regForm, true, 'Creating account…');
-      say('Creating your account…', true);
+      say('Creating your account… (server ghumale 30-60 sec lagte pare)', true);
       try {
         await api('/register', { name, email, password, question, answer });
         say('Account created! Logging you in…', true);
