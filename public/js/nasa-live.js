@@ -22,7 +22,7 @@
 
   var REFRESH_MS = 30 * 60 * 1000;
   var RETRY_MS = 60 * 1000;
-  var REQUEST_TIMEOUT_MS = 25 * 1000;
+  var REQUEST_TIMEOUT_MS = 15 * 1000;
   var MAX_BG_RETRIES = 5;
 
   function el(tag, className, text) {
@@ -106,26 +106,50 @@
   // ── Generic loader: fetch → render; on failure show saved data and retry later ──
   var retryTimers = {};
   var failCount = {};
+  var rendered = {};
   var lastLoad = 0;
+
+  function status(box, msg) {
+    reset(box);
+    box.appendChild(el('p', 'live-status', msg));
+  }
+
+  function savedNote(box, cached) {
+    box.appendChild(el('small', 'live-credit',
+      'Showing saved data from ' + new Date(cached.t).toLocaleString() + ' (refreshing from NASA…)'));
+  }
 
   function load(key, path, box, render) {
     clearTimeout(retryTimers[key]);
-    getWithRetry(path, 3).then(function (d) {
+
+    // 1) Show the saved copy immediately, so the card is never stuck on "Loading…".
+    if (!rendered[key]) {
+      var cached = readCache(key);
+      if (cached) {
+        try { render(cached.data); rendered[key] = true; savedNote(box, cached); } catch (e) {}
+      }
+    }
+
+    // 2) No saved copy yet and NASA is slow → say so instead of "Loading…" forever.
+    var slowTimer = null;
+    if (!rendered[key]) {
+      slowTimer = setTimeout(function () {
+        if (!rendered[key]) status(box, 'NASA is responding slowly, still trying…');
+      }, 6000);
+    }
+
+    // 3) Fetch fresh data.
+    getWithRetry(path, 2).then(function (d) {
+      clearTimeout(slowTimer);
       failCount[key] = 0;
       saveCache(key, d);
       render(d);
+      rendered[key] = true;
     }).catch(function (err) {
+      clearTimeout(slowTimer);
       console.error('[nasa-live]', key, err.message || err);
-      var cached = readCache(key);
-      if (cached) {
-        try {
-          render(cached.data);
-          box.appendChild(el('small', 'live-credit',
-            'Showing saved data from ' + new Date(cached.t).toLocaleString() + ' (NASA is slow right now).'));
-        } catch (e) { fail(box, err); }
-      } else {
-        fail(box, err);
-      }
+      // Keep whatever is already on screen (saved data); only show an error if there is nothing.
+      if (!rendered[key]) fail(box, err);
       failCount[key] = (failCount[key] || 0) + 1;
       if (failCount[key] <= MAX_BG_RETRIES) {
         retryTimers[key] = setTimeout(function () { load(key, path, box, render); }, RETRY_MS);
