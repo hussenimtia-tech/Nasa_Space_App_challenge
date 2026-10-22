@@ -1,6 +1,6 @@
 // Netlify Function: SpaceSkribble auth API (replaces auto-server.js on Netlify).
 // Routes (all under /api): POST /register, POST /login, GET /questions, GET /progress,
-// POST /forgot-password/question, POST /forgot-password/reset, POST /internal/progress
+// POST /forgot/question, POST /forgot/reset (old /forgot-password/* paths still work), POST /internal/progress
 // Data is stored in Netlify Blobs (built in, no extra database account needed).
 // Also: GET /nasa/apod, /nasa/neo, /nasa/exoplanets (live NASA data) and POST /nova (real AI tutor).
 // Environment variables (Netlify > Site configuration > Environment variables):
@@ -97,7 +97,9 @@ export default async (req) => {
     );
   }
 
-  const path = new URL(req.url).pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
+  // /forgot/* is the short form used by the frontend; /forgot-password/* keeps working too.
+  const path = (new URL(req.url).pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/")
+    .replace(/^\/forgot-password(?=\/|$)/, "/forgot");
   const method = req.method;
 
   // ---- GET /nasa/apod, /nasa/neo, /nasa/exoplanets (public, cached)
@@ -302,16 +304,16 @@ export default async (req) => {
       return json({ success: true, saved: true });
     }
 
-    // ---- POST /forgot-password/question
-    if (method === "POST" && path === "/forgot-password/question") {
+    // ---- POST /forgot/question  (also reachable as /forgot-password/question)
+    if (method === "POST" && path === "/forgot/question") {
       const { email } = await readBody(req);
       const user = await users.get(key(normEmail(email)), { type: "json" });
       if (!user) return json({ message: "Account not found." }, 404);
       return json({ question: user.question });
     }
 
-    // ---- POST /forgot-password/reset
-    if (method === "POST" && path === "/forgot-password/reset") {
+    // ---- POST /forgot/reset  (also reachable as /forgot-password/reset)
+    if (method === "POST" && path === "/forgot/reset") {
       const { email, answer, newPassword } = await readBody(req);
       if (!answer || !newPassword || String(newPassword).length < 6)
         return json({ message: "Enter the answer and a password of at least 6 characters." }, 400);
