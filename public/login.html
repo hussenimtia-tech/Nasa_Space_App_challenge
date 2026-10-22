@@ -36,6 +36,8 @@
 .auth-footer a,.auth-back{color:var(--ion,#5ce1ff);text-decoration:none;transition:color .2s}
 .auth-footer a:hover,.auth-back:hover{color:var(--sun-2,#ffd166)}
 .auth-back{display:block;margin-top:20px;text-align:center;font-size:14px}
+.auth-forgot{justify-self:end;margin-top:-6px;color:var(--ion,#5ce1ff);font-size:13px;text-decoration:none;transition:color .2s}
+.auth-forgot:hover{color:var(--sun-2,#ffd166)}
 @media (max-width:480px){.auth-screen{padding:16px}.auth-card{padding:24px 20px;border-radius:20px}}
 @media (prefers-reduced-motion:reduce){.auth-submit,.auth-form input,.auth-form select{transition:none}}
   </style>
@@ -61,6 +63,7 @@
         <label for="login-password">Password
           <input id="login-password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
         </label>
+        <a href="#" id="forgot-link" class="auth-forgot">Forgot password?</a>
         <button class="auth-submit" type="submit">Login to SpaceSkribble</button>
       </form>
 
@@ -71,5 +74,33 @@
   </main>
   <script src="./js/config.js"></script>
   <script src="./js/auth.js"></script>
+  <script>
+  // Forgot password: uses window.requestPasswordReset(email) from auth.js
+  (function () {
+    var link = document.getElementById('forgot-link');
+    var emailInput = document.getElementById('login-email');
+    var msg = document.getElementById('auth-message');
+    link.addEventListener('click', async function (e) {
+      e.preventDefault();
+      var email = emailInput.value.trim();
+      if (!email) {
+        msg.textContent = 'Enter your email address first, then click "Forgot password?".';
+        emailInput.focus();
+        return;
+      }
+      if (typeof window.requestPasswordReset !== 'function') {
+        msg.textContent = 'Password reset is not connected yet.';
+        return;
+      }
+      msg.textContent = 'Sending reset link...';
+      try {
+        await window.requestPasswordReset(email);
+        msg.textContent = 'If an account exists for this email, a reset link has been sent. Check your inbox and spam folder.';
+      } catch (err) {
+        msg.textContent = 'Could not send the reset link. Please try again.';
+      }
+    });
+  })();
+  </script>
 </body>
 </html>
