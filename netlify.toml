@@ -9,3 +9,7 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+    [[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
