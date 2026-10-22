@@ -3,7 +3,14 @@
  * Data comes from our own server (/api/nasa/*), which calls NASA's public APIs:
  *   APOD · NeoWs (near-Earth objects) · Exoplanet Archive
  * Every card shows its source link, so players and judges can verify the data.
- * Cards refresh automatically every 30 minutes while the page stays open.
+ *
+ * Reliability:
+ *  - each request has a timeout and is retried automatically (3 tries)
+ *  - the last good answer is saved in the browser; if NASA is slow or down,
+ *    the card shows the saved data instead of an error
+ *  - failed cards retry again in the background every minute
+ *  - cards refresh every 30 minutes, and again when the tab becomes visible
+ *    after being hidden (so the daily APOD is always up to date)
  */
 (function () {
   'use strict';
@@ -12,6 +19,11 @@
   var neoBox = document.getElementById('live-neo');
   var exoBox = document.getElementById('live-exo');
   if (!apodBox) return;
+
+  var REFRESH_MS = 30 * 60 * 1000;
+  var RETRY_MS = 60 * 1000;
+  var REQUEST_TIMEOUT_MS = 25 * 1000;
+  var MAX_BG_RETRIES = 5;
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -36,9 +48,9 @@
   function fail(box, err) {
     reset(box);
     if (err) console.error('[nasa-live]', err.message || err);
-    var msg = window.SSLang ? window.SSLang.t('live.error', 'NASA is not reachable right now. Please try again soon.') : 'NASA is not reachable right now. Please try again soon.';
+    var fallback = 'NASA is not reachable right now. Please try again soon.';
+    var msg = window.SSLang ? window.SSLang.t('live.error', fallback) : fallback;
     box.appendChild(el('p', 'live-status', msg));
-    // Small technical hint (e.g. "HTTP 500") so problems are easy to diagnose.
     if (err && err.message) box.appendChild(el('small', 'live-credit', '(' + err.message + ')'));
   }
 
@@ -47,8 +59,12 @@
   var API = String(window.SS_API || '/api').replace(/\/+$/, '');
   if (!/\/api$/.test(API)) API += '/api';
 
+  // ── Network: timeout + retry ──
   function get(path) {
-    return fetch(API + path.replace(/^\/api/, '')).then(function (res) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
+    var opts = controller ? { signal: controller.signal } : {};
+    return fetch(API + path.replace(/^\/api/, ''), opts).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (!res.ok) {
           var why = body.detail || body.message || '';
@@ -56,75 +72,146 @@
         }
         return body;
       });
+    }).then(function (body) {
+      if (timer) clearTimeout(timer);
+      return body;
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      if (err && err.name === 'AbortError') err = new Error('timeout');
+      throw err;
+    });
+  }
+
+  function getWithRetry(path, attempts) {
+    return get(path).catch(function (err) {
+      if (attempts <= 1) throw err;
+      var wait = (4 - attempts + 1) * 2000; // 2s, 4s
+      return new Promise(function (resolve) { setTimeout(resolve, wait); })
+        .then(function () { return getWithRetry(path, attempts - 1); });
+    });
+  }
+
+  // ── Saved copy of the last good answer ──
+  var CACHE_PREFIX = 'ss-nasa-';
+  function saveCache(key, data) {
+    try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ t: Date.now(), data: data })); } catch (e) {}
+  }
+  function readCache(key) {
+    try {
+      var raw = JSON.parse(localStorage.getItem(CACHE_PREFIX + key));
+      return raw && raw.data ? raw : null;
+    } catch (e) { return null; }
+  }
+
+  // ── Generic loader: fetch → render; on failure show saved data and retry later ──
+  var retryTimers = {};
+  var failCount = {};
+  var lastLoad = 0;
+
+  function load(key, path, box, render) {
+    clearTimeout(retryTimers[key]);
+    getWithRetry(path, 3).then(function (d) {
+      failCount[key] = 0;
+      saveCache(key, d);
+      render(d);
+    }).catch(function (err) {
+      console.error('[nasa-live]', key, err.message || err);
+      var cached = readCache(key);
+      if (cached) {
+        try {
+          render(cached.data);
+          box.appendChild(el('small', 'live-credit',
+            'Showing saved data from ' + new Date(cached.t).toLocaleString() + ' (NASA is slow right now).'));
+        } catch (e) { fail(box, err); }
+      } else {
+        fail(box, err);
+      }
+      failCount[key] = (failCount[key] || 0) + 1;
+      if (failCount[key] <= MAX_BG_RETRIES) {
+        retryTimers[key] = setTimeout(function () { load(key, path, box, render); }, RETRY_MS);
+      }
     });
   }
 
   var number = function (n) { return Number(n).toLocaleString(); };
 
   // ── APOD ──
-  function loadApod() {
-    get('/api/nasa/apod').then(function (d) {
-      reset(apodBox);
-      if (d.url) {
-        var img = el('img', 'live-img');
-        img.src = d.url;
-        img.alt = d.title;
-        img.loading = 'lazy';
-        apodBox.appendChild(img);
-      }
-      apodBox.appendChild(el('h4', 'live-title', d.title));
-      var exp = d.explanation || '';
-      var text = exp.length > 320 ? exp.slice(0, 320).replace(/\s+\S*$/, '') + '…' : exp;
-      apodBox.appendChild(el('p', 'live-text', text));
-      apodBox.appendChild(el('p', 'live-credit', 'Credit: ' + d.copyright + ' · ' + d.date));
-      apodBox.appendChild(link(d.source, 'Source: NASA APOD ↗'));
-    }).catch(function (e) { fail(apodBox, e); });
+  function renderApod(d) {
+    reset(apodBox);
+    var isVideo = (d.media_type || d.mediaType) === 'video';
+    var imgUrl = isVideo ? (d.thumbnail_url || d.thumbnail) : d.url;
+    if (imgUrl) {
+      var img = el('img', 'live-img');
+      img.src = imgUrl;
+      img.alt = d.title || 'Astronomy Picture of the Day';
+      img.loading = 'lazy';
+      img.onerror = function () { img.style.display = 'none'; };
+      apodBox.appendChild(img);
+    }
+    apodBox.appendChild(el('h4', 'live-title', d.title || ''));
+    var exp = d.explanation || '';
+    var text = exp.length > 320 ? exp.slice(0, 320).replace(/\s+\S*$/, '') + '…' : exp;
+    apodBox.appendChild(el('p', 'live-text', text));
+    var credit = 'Credit: ' + (d.copyright ? String(d.copyright).replace(/\s+/g, ' ').trim() : 'NASA') + (d.date ? ' · ' + d.date : '');
+    apodBox.appendChild(el('p', 'live-credit', credit));
+    if (isVideo && d.url) apodBox.appendChild(link(d.url, 'Watch today\u2019s video ↗'));
+    apodBox.appendChild(link(d.source || 'https://apod.nasa.gov/apod/astropix.html', 'Source: NASA APOD ↗'));
   }
+  function loadApod() { load('apod', '/api/nasa/apod', apodBox, renderApod); }
 
   // ── Near-Earth objects ──
-  function loadNeo() {
-    get('/api/nasa/neo').then(function (d) {
-      reset(neoBox);
-      neoBox.appendChild(el('p', 'live-text', number(d.count) + ' near-Earth objects are tracked today (' + d.date + '). Closest approaches:'));
-      var list = el('ul', 'live-list');
-      d.objects.slice(0, 5).forEach(function (o) {
-        var li = el('li');
-        var name = o.link ? link(o.link, o.name) : el('strong', '', o.name);
-        li.appendChild(name);
-        li.appendChild(el('span', o.hazardous ? 'live-tag warn' : 'live-tag', o.hazardous ? 'potentially hazardous' : 'not hazardous'));
-        li.appendChild(el('small', '', '~' + number(o.diameterM) + ' m wide · misses Earth by ' + number(o.missKm) + ' km · ' + o.speedKps + ' km/s'));
-        list.appendChild(li);
-      });
-      neoBox.appendChild(list);
-      neoBox.appendChild(link(d.source, 'Source: NASA NeoWs / JPL CNEOS ↗'));
-    }).catch(function (e) { fail(neoBox, e); });
+  function renderNeo(d) {
+    reset(neoBox);
+    neoBox.appendChild(el('p', 'live-text', number(d.count) + ' near-Earth objects are tracked today (' + d.date + '). Closest approaches:'));
+    var list = el('ul', 'live-list');
+    (d.objects || []).slice(0, 5).forEach(function (o) {
+      var li = el('li');
+      var name = o.link ? link(o.link, o.name) : el('strong', '', o.name);
+      li.appendChild(name);
+      li.appendChild(el('span', o.hazardous ? 'live-tag warn' : 'live-tag', o.hazardous ? 'potentially hazardous' : 'not hazardous'));
+      li.appendChild(el('small', '', '~' + number(o.diameterM) + ' m wide · misses Earth by ' + number(o.missKm) + ' km · ' + o.speedKps + ' km/s'));
+      list.appendChild(li);
+    });
+    neoBox.appendChild(list);
+    neoBox.appendChild(link(d.source, 'Source: NASA NeoWs / JPL CNEOS ↗'));
   }
+  function loadNeo() { load('neo', '/api/nasa/neo', neoBox, renderNeo); }
 
   // ── Exoplanets ──
-  function loadExo() {
-    get('/api/nasa/exoplanets').then(function (d) {
-      reset(exoBox);
-      var wrap = el('div', 'live-table-wrap');
-      var table = el('table', 'live-table');
-      var head = el('tr');
-      ['Planet', 'Star', 'Found', 'Size (× Earth)', 'Year length (days)', 'Distance (light-years)'].forEach(function (h) {
-        head.appendChild(el('th', '', h));
-      });
-      table.appendChild(head);
-      d.planets.forEach(function (p) {
-        var row = el('tr');
-        [p.name, p.star, p.year, p.radiusEarth != null ? p.radiusEarth.toFixed(1) : '–',
-         p.periodDays != null ? p.periodDays.toFixed(1) : '–', p.distanceLy != null ? number(p.distanceLy) : '–']
-          .forEach(function (v) { row.appendChild(el('td', '', String(v))); });
-        table.appendChild(row);
-      });
-      wrap.appendChild(table);
-      exoBox.appendChild(wrap);
-      exoBox.appendChild(link(d.source, 'Source: NASA Exoplanet Archive ↗'));
-    }).catch(function (e) { fail(exoBox, e); });
+  function renderExo(d) {
+    reset(exoBox);
+    var wrap = el('div', 'live-table-wrap');
+    var table = el('table', 'live-table');
+    var head = el('tr');
+    ['Planet', 'Star', 'Found', 'Size (× Earth)', 'Year length (days)', 'Distance (light-years)'].forEach(function (h) {
+      head.appendChild(el('th', '', h));
+    });
+    table.appendChild(head);
+    (d.planets || []).forEach(function (p) {
+      var row = el('tr');
+      [p.name, p.star, p.year, p.radiusEarth != null ? p.radiusEarth.toFixed(1) : '–',
+       p.periodDays != null ? p.periodDays.toFixed(1) : '–', p.distanceLy != null ? number(p.distanceLy) : '–']
+        .forEach(function (v) { row.appendChild(el('td', '', String(v))); });
+      table.appendChild(row);
+    });
+    wrap.appendChild(table);
+    exoBox.appendChild(wrap);
+    exoBox.appendChild(link(d.source, 'Source: NASA Exoplanet Archive ↗'));
+  }
+  function loadExo() { load('exo', '/api/nasa/exoplanets', exoBox, renderExo); }
+
+  function loadAll() {
+    lastLoad = Date.now();
+    loadApod();
+    loadNeo();
+    loadExo();
   }
 
-  function loadAll() { loadApod(); loadNeo(); loadExo(); }
   loadAll();
-  setInterval(loadAll, 30 * 60 * 1000);
+  setInterval(loadAll, REFRESH_MS);
+
+  // Tab was in the background (e.g. phone asleep overnight) → refresh when it comes back.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && Date.now() - lastLoad > REFRESH_MS) loadAll();
+  });
 })();
