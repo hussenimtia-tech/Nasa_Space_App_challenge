@@ -1,209 +1,222 @@
+/*
+ * SpaceSkribble – auth flow
+ * Flow: login.html -> (no account?) register.html -> auto login -> index.html
+ * Works with auto-server.js (POST /register, POST /login).
+ * Token is saved in localStorage under "spaceSkribbleUser" (same key app.js / profile.js read).
+ */
+(() => {
+  'use strict';
 
-const AUTH_API = "http://localhost:3001";
-const USER_KEY = "spaceSkribbleUser";
+  // ---- settings -------------------------------------------------------
+  const REQUIRE_LOGIN = true; // false = guests may open index.html without logging in
+  const KEY = 'spaceSkribbleUser';
 
-const registerForm = document.getElementById("register-form");
-const loginForm = document.getElementById("login-form");
-const message = document.getElementById("auth-message");
+  const isLocalHost = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
 
-// Send a request to the authentication server
+  // js/config.js e window.SS_API set kora thakle seta, na hole sudhu localhost e :3001 use hobe.
+  const API = (window.SS_API || (isLocalHost ? 'http://localhost:3001' : '')).replace(/\/+$/, '');
 
-async function sendRequest(endpoint, data) {
-  const response = await fetch(`${AUTH_API}${endpoint}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(data)
-  });
+  const file = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  const isLoginPage = file === 'login.html';
+  const isRegisterPage = file === 'register.html';
+  const isAuthPage = isLoginPage || isRegisterPage;
+  const isHome = file === 'index.html' || file === '';
+  const isProfile = file === 'profile.html';
+  const $ = (id) => document.getElementById(id);
 
-  const raw = await response.text();
-
-  console.log("HTTP status:", response.status);
-  console.log("Raw server response:", raw);
-
-  let result;
-
-  try {
-    result = JSON.parse(raw);
-  } catch {
-    throw new Error("Server did not return valid JSON.");
-  }
-
-  if (!response.ok) {
-    throw new Error(result.message || "Request failed.");
-  }
-
-  return result;
-}
-
-
-// Save the authenticated user and token
-function saveUser(user, token) {
-  if (!user || typeof user !== "object") {
-    throw new Error("The server did not return valid user information.");
-  }
-
-  if (!token || typeof token !== "string") {
-    throw new Error("The server did not return an authentication token.");
-  }
-
-  const savedUser = {
-    ...user,
-    token
-  };
-
-  localStorage.setItem(USER_KEY, JSON.stringify(savedUser));
-
-  return savedUser;
-}
-
-// Read the currently logged-in user
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-
-    if (!raw) return null;
-
-    const user = JSON.parse(raw);
-
-    if (!user || typeof user !== "object" || !user.token) {
+  // ---- storage helpers --------------------------------------------------
+  function decodeJwt(token) {
+    try {
+      const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b + '='.repeat((4 - (b.length % 4)) % 4)));
+    } catch {
       return null;
     }
+  }
 
-    return user;
-  } catch (error) {
-    console.error("Could not read saved user:", error);
+  function clearUser() {
+    try { localStorage.removeItem(KEY); } catch {}
+    try { sessionStorage.removeItem(KEY); } catch {}
+  }
+
+  function getUser() {
+    for (const store of [localStorage, sessionStorage]) {
+      try {
+        const u = JSON.parse(store.getItem(KEY) || 'null');
+        if (!u || typeof u.token !== 'string' || !u.token) continue;
+        const p = decodeJwt(u.token);
+        if (p && p.exp && p.exp * 1000 < Date.now()) { clearUser(); return null; } // expired
+        return u;
+      } catch {}
+    }
     return null;
   }
-}
 
-// REGISTER
-if (registerForm) {
-  registerForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    if (message) message.textContent = "Creating account...";
-
+  function saveUser(token, user) {
+    const data = { token, id: user.id, name: user.name, email: user.email, user };
+    localStorage.setItem(KEY, JSON.stringify(data));
     try {
-      const result = await sendRequest("/register", {
-        name: document.getElementById("reg-name")?.value.trim(),
-        email: document.getElementById("reg-email")?.value.trim(),
-        password: document.getElementById("reg-password")?.value,
-        question: document.getElementById("security-question")?.value,
-        answer: document.getElementById("security-answer")?.value.trim()
-      });
-
-      if (message) {
-        message.textContent =
-          (result.message || "Account created!") +
-          " Redirecting to login...";
-      }
-
-      registerForm.reset();
-
-      setTimeout(() => {
-        window.location.href = "./login.html";
-      }, 1200);
-    } catch (error) {
-      if (message) {
-        message.textContent = error.message || "Registration failed.";
-      }
-    }
-  });
-}
-
-
- // LOGIN
-if (loginForm) {
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    if (message) message.textContent = "Logging in...";
-
-    try {
-      const result = await sendRequest("/login", {
-        email: document.getElementById("login-email").value.trim(),
-        password: document.getElementById("login-password").value
-      });
-
-      console.log("Login response:", result);
-
-      // The provided auto-server.js returns these exact fields.
-      if (!result || !result.token || !result.user) {
-        throw new Error(
-          "Login response is missing token or user. Check the server response in Console."
-        );
-      }
-
-      const savedUser = {
-        ...result.user,
-        token: result.token
-      };
-
-      localStorage.setItem(
-        "spaceSkribbleUser",
-        JSON.stringify(savedUser)
-      );
-
-      // Verify that the user was saved
-      const storedUser = JSON.parse(
-        localStorage.getItem("spaceSkribbleUser")
-      );
-
-      if (!storedUser?.token) {
-        throw new Error("Could not save the login session.");
-      }
-
-      if (message) {
-        message.textContent =
-          `Welcome, ${savedUser.name || savedUser.email}!`;
-      }
-
-      updateAccountMenu();
-
-      setTimeout(() => {
-        window.location.href = "./index.html";
-      }, 500);
-
-    } catch (error) {
-      console.error("Login error:", error);
-
-      if (message) {
-        message.textContent = error.message || "Login failed.";
-      }
-    }
-  });
-}
-
-// HOME ACCOUNT NAVIGATION
-function updateAccountMenu() {
-  let user = null;
-
-  try {
-    user = JSON.parse(
-      localStorage.getItem("spaceSkribbleUser") || "null"
-    );
-  } catch {
-    localStorage.removeItem("spaceSkribbleUser");
+      localStorage.setItem('ss-name', user.name);
+    } catch {}
   }
 
-  const profile = document.getElementById("profile-link");
-  const login = document.getElementById("login-link");
-  const register = document.getElementById("register-link");
-
-  const loggedIn = Boolean(user?.token);
-
-  if (profile) {
-    profile.hidden = !loggedIn;
-
-    if (loggedIn) {
-      profile.title = `My Profile — ${user.name || user.email || ""}`;
-    }
+  function logout() {
+    clearUser();
+    location.href = './login.html';
   }
 
-  if (login) login.hidden = loggedIn;
-  if (register) register.hidden = loggedIn;
-}
+  // ---- redirect helpers ---------------------------------------------------
+  function safeNext() {
+    const n = new URLSearchParams(location.search).get('next') || '';
+    // only same-site relative paths like "index.html?room=ABCDE"
+    return /^[a-z0-9_\-./?=&%]+$/i.test(n) && !n.includes('//') && !n.includes(':') ? './' + n.replace(/^\.?\//, '') : './index.html';
+  }
 
-updateAccountMenu();
+  function goLogin() {
+    const here = (location.pathname.split('/').pop() || 'index.html') + location.search;
+    location.replace('./login.html?next=' + encodeURIComponent(here));
+  }
+
+  const user = getUser();
+
+  // ---- guards ---------------------------------------------------------------
+  if (isAuthPage && user) {
+    location.replace(safeNext());
+    return;
+  }
+  if ((isHome && REQUIRE_LOGIN || isProfile) && !user) {
+    goLogin();
+    return;
+  }
+
+  // ---- UI: navbar on home page -------------------------------------------------
+  function updateNav() {
+    const l = $('login-link'), r = $('register-link'), p = $('profile-link');
+    const on = !!user;
+    if (l) l.hidden = on;
+    if (r) r.hidden = on;
+    if (p) p.hidden = !on;
+    if (on && p) p.title = user.name || 'My Profile';
+    const nameInput = $('name-input');
+    if (on && nameInput && !nameInput.value && user.name) nameInput.value = String(user.name).slice(0, 16);
+  }
+
+  // ---- UI: messages ---------------------------------------------------------------
+  const msgEl = $('auth-message');
+  function say(text, ok = false) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.color = ok ? '#06d6a0' : '#ff8a9b';
+  }
+  function busy(form, b, label) {
+    const btn = form.querySelector('button[type="submit"]');
+    if (!btn) return;
+    btn.disabled = b;
+    if (label) btn.textContent = label;
+  }
+
+  const TIMEOUT_MS = 60000;
+
+  async function api(path, body) {
+    if (!API) {
+      throw new Error('Server URL set kora nai. js/config.js e window.SS_API te URL boshao.');
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') {
+        throw new Error('Server respond korte onek somoy nicche. Ektu pore abar try koro.');
+      }
+      throw new Error(
+        isLocalHost
+          ? 'Cannot reach the server. Start it with: node auto-server.js (port 3001).'
+          : 'Server e connect hocche na. Ektu pore abar try koro.'
+      );
+    }
+    clearTimeout(timer);
+    let data = {};
+    try { data = await res.json(); } catch {}
+    if (!res.ok) {
+      const err = new Error(data.message || 'Something went wrong. Please try again.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // ---- login page --------------------------------------------------------------------
+  const loginForm = $('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('login-email').value.trim();
+      const password = $('login-password').value;
+      if (!email || !password) return say('Enter your email and password.');
+      busy(loginForm, true, 'Logging in…');
+      say('Checking your account…', true);
+      try {
+        const data = await api('/login', { email, password });
+        saveUser(data.token, data.user);
+        say('Welcome back, ' + data.user.name + '! Opening SpaceSkribble…', true);
+        setTimeout(() => location.replace(safeNext()), 700);
+      } catch (err) {
+        if (err.status === 401) {
+          say('Wrong email or password. No account yet? Use "Create an account" below.');
+        } else say(err.message);
+        busy(loginForm, false, 'Login to SpaceSkribble');
+      }
+    });
+  }
+
+  // ---- register page ---------------------------------------------------------------------
+  const regForm = $('register-form');
+  if (regForm) {
+    regForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = $('reg-name').value.trim();
+      const email = $('reg-email').value.trim();
+      const password = $('reg-password').value;
+      const question = $('security-question').value;
+      const answer = $('security-answer').value.trim();
+      if (!name || !email || !password || !question || !answer) return say('Fill in all fields.');
+      if (password.length < 6) return say('Password must be at least 6 characters.');
+      busy(regForm, true, 'Creating account…');
+      say('Creating your account…', true);
+      try {
+        await api('/register', { name, email, password, question, answer });
+        say('Account created! Logging you in…', true);
+        try {
+          const data = await api('/login', { email, password });
+          saveUser(data.token, data.user);
+          say('All set, ' + data.user.name + '! Opening SpaceSkribble…', true);
+          setTimeout(() => location.replace(safeNext()), 800);
+        } catch {
+          say('Account created. Please log in.', true);
+          setTimeout(() => location.replace('./login.html'), 1000);
+        }
+      } catch (err) {
+        say(err.status === 409 ? 'This email is already registered. Try logging in instead.' : err.message);
+        busy(regForm, false, 'Create Account');
+      }
+    });
+  }
+
+  // ---- common --------------------------------------------------------------------------------
+  const logoutBtn = $('logout-button');
+  if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+  const start = () => { if (isHome) updateNav(); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+
+  window.SSAuth = { getUser, logout, saveUser };
+})();
