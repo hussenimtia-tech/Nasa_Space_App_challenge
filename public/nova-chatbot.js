@@ -1,4 +1,3 @@
-
 /* =========================================================
    NOVA AI CHATBOT
    Always-visible robot + draggable launcher + chat panel
@@ -82,6 +81,8 @@
     clearBtn.addEventListener("click", () => {
       if (messages) messages.replaceChildren();
 
+      history.length = 0;
+
       if (welcome) welcome.hidden = false;
       if (suggestions) suggestions.hidden = false;
       if (typing) typing.hidden = true;
@@ -141,11 +142,47 @@
       return "You're welcome! ✨ Ask me anything else.";
     }
 
-    return "Thanks for your message! 😊 I'm NOVA, currently running in demo mode. To answer a wider range of questions, connect me to a secure AI backend API. Never expose secret API keys in browser JavaScript.";
+    return "Thanks for your message! 😊 I'm NOVA. My live AI brain is offline right now, so I can only answer a few basic space questions. Try asking about black holes, Earth or gravity!";
   }
 
   // 6. SEND MESSAGE
-  let replyTimer = null;
+  // NOVA asks our Netlify Function (/api/nova), which talks to the real AI. The API key never
+  // reaches the browser. If the function has no key (or fails), we fall back to the demo replies.
+  const history = [];
+
+  async function askNova(question) {
+    const user = window.SSAuth && window.SSAuth.getUser && window.SSAuth.getUser();
+    if (!user) return localReply(question);
+
+    history.push({ role: "user", content: question });
+
+    try {
+      const api = (window.SS_API || "/api").replace(/\/+$/, "");
+      const response = await fetch(api + "/nova", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + user.token
+        },
+        body: JSON.stringify({
+          messages: history.slice(-10),
+          lang: window.SSLang ? window.SSLang.get() : "en"
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.reply) {
+        history.push({ role: "assistant", content: data.reply });
+        return data.reply;
+      }
+    } catch (error) {
+      console.warn("NOVA server unreachable, using demo reply.", error);
+    }
+
+    history.pop();
+    return localReply(question);
+  }
 
   function sendMessage(value) {
     const question = (value || "").trim();
@@ -163,14 +200,10 @@
 
     if (typing) typing.hidden = false;
 
-    if (replyTimer) clearTimeout(replyTimer);
-
-    replyTimer = setTimeout(() => {
+    askNova(question).then((answer) => {
       if (typing) typing.hidden = true;
-
-      addMessage(localReply(question), "bot");
-      replyTimer = null;
-    }, 600);
+      if (answer) addMessage(answer, "bot");
+    });
   }
 
   // 7. FORM + ENTER KEY
