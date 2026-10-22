@@ -9,3 +9,9 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+# /api/* পাথের রিকোয়েস্টগুলো Netlify Functions-এ পাঠানোর জন্য Redirect Rule
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
