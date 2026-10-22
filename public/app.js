@@ -199,9 +199,74 @@ send(type, payload) {
     leave() { this.socket.disconnect(); }
   }
 
+  // ── Peer-to-peer channel (WebRTC via PeerJS) ──────────────────────────────
+  // Lets rooms work ACROSS devices on static hosting (Netlify) with no game server.
+  // The host's browser runs the game engine; every guest connects straight to the host.
+  // Falls back to BroadcastChannel (same browser only) if PeerJS cannot be loaded.
+  const P2P_OK = typeof window.Peer === 'function';
+  const peerOptions = () => {
+    const o = Object.assign({ debug: 0 }, window.SS_PEER || {}); // optional own PeerServer: { host, port, path, secure }
+    if (window.SS_ICE) o.config = { iceServers: window.SS_ICE }; // optional TURN servers for strict networks
+    return o;
+  };
+  const peerId = (code) => 'ssk-' + String(code).toLowerCase();
+
+  class PeerHostChannel {
+    constructor(code, onProblem) {
+      this.onmessage = null;
+      this.conns = new Map(); // guest id -> connection
+      this.peer = new window.Peer(peerId(code), peerOptions());
+      this.peer.on('error', (e) => onProblem && onProblem(e));
+      this.peer.on('connection', (conn) => {
+        conn.on('data', (data) => {
+          if (data && data.from && !conn.__pid) { conn.__pid = data.from; this.conns.set(data.from, conn); }
+          if (this.onmessage) this.onmessage({ data });
+        });
+        conn.on('close', () => {
+          if (conn.__pid) {
+            this.conns.delete(conn.__pid);
+            if (this.onmessage) this.onmessage({ data: { kind: 'bye', from: conn.__pid } });
+          }
+        });
+        conn.on('error', () => {});
+      });
+    }
+    // Messages are routed by their "to" field, so secret events (the drawer's word) reach only the drawer.
+    postMessage(m) {
+      const send = (c) => { if (c.open) c.send(m); };
+      if (m.kind !== 'evt' || m.to === 'all') return this.conns.forEach(send);
+      if (m.to && m.to.except) return this.conns.forEach((c, id) => id !== m.to.except && send(c));
+      const target = this.conns.get(m.to);
+      if (target) send(target);
+    }
+    close() { try { this.peer.destroy(); } catch {} }
+  }
+
+  class PeerGuestChannel {
+    constructor(code, onProblem) {
+      this.onmessage = null;
+      this.queue = [];
+      this.conn = null;
+      this.peer = new window.Peer(undefined, peerOptions());
+      this.peer.on('error', (e) => onProblem && onProblem(e));
+      this.peer.on('open', () => {
+        this.conn = this.peer.connect(peerId(code), { reliable: true, serialization: 'json' });
+        this.conn.on('open', () => this.queue.splice(0).forEach((m) => this.conn.send(m)));
+        this.conn.on('data', (data) => this.onmessage && this.onmessage({ data }));
+        this.conn.on('close', () => this.onmessage && this.onmessage({ data: { kind: 'hostgone' } }));
+        this.conn.on('error', () => {});
+      });
+    }
+    postMessage(m) {
+      if (this.conn && this.conn.open) this.conn.send(m);
+      else this.queue.push(m);
+    }
+    close() { try { this.peer.destroy(); } catch {} }
+  }
+
   class LocalTransport {
     constructor() {
-      this.kind = 'local';
+      this.kind = P2P_OK ? 'p2p' : 'local';
       this.id = 'p-' + rid();
       this.channel = null;
       this.room = null;
@@ -219,7 +284,15 @@ send(type, payload) {
     // ── host side: this tab runs the engine ──
     create(profile) {
       const code = makeRoomCode();
-      this.channel = new BroadcastChannel('spaceskribble-' + code);
+      this.channel = P2P_OK
+        ? new PeerHostChannel(code, (e) => {
+            // Could not register the room code (or reach the PeerJS signalling server).
+            const msg = e && e.type === 'unavailable-id'
+              ? 'That room code is already in use. Please create the room again.'
+              : 'Cannot reach the online matchmaking service. Friends in other browser tabs can still join; check your internet for other devices.';
+            this.handler('error', { message: msg });
+          })
+        : new BroadcastChannel('spaceskribble-' + code);
       this.room = new Room({
         code,
         emit: (to, event, payload) => {
@@ -242,8 +315,20 @@ send(type, payload) {
 
     // ── guest side: another tab of this browser hosts ──
     join(code, profile) {
-      this.channel = new BroadcastChannel('spaceskribble-' + code);
       let answered = false;
+      const fail = (message) => {
+        if (answered) return;
+        answered = true;
+        if (this.channel) this.channel.close();
+        this.channel = null;
+        this.handler('error', { message });
+      };
+      this.channel = P2P_OK
+        ? new PeerGuestChannel(code, (e) =>
+            fail(e && e.type === 'peer-unavailable'
+              ? 'Room not found. Check the code, and make sure the host still has the game page open.'
+              : 'Could not connect to that room. Check your internet connection and try again.'))
+        : new BroadcastChannel('spaceskribble-' + code);
       this.channel.onmessage = ({ data: m }) => {
         if (m.kind === 'hostgone') return this.handler('hostgone', {});
         if (m.kind !== 'evt' || !this.addressedToMe(m.to)) return;
@@ -252,13 +337,10 @@ send(type, payload) {
       };
       this.channel.postMessage({ kind: 'join', from: this.id, profile });
       setTimeout(() => {
-        if (answered) return;
-        this.channel.close();
-        this.channel = null;
-        this.handler('error', {
-          message: 'Room not found. In local mode, rooms only work between tabs of the same browser. Run the Node server (see README) to play across devices.',
-        });
-      }, 1500);
+        fail(P2P_OK
+          ? 'Could not reach the room host. Ask the host to keep the game page open, then try again.'
+          : 'Room not found. In local mode, rooms only work between tabs of the same browser. Run the Node server (see README) to play across devices.');
+      }, P2P_OK ? 15000 : 1500);
     }
 
     send(type, payload) {
@@ -298,9 +380,11 @@ send(type, payload) {
   const modeText =
     net.kind === 'online'
       ? '🟢 Online multiplayer – friends on any device can join with your code'
+      : net.kind === 'p2p'
+      ? '🟢 Online (peer-to-peer) – friends on any device can join with your code. The host keeps this page open.'
       : '🟣 Local mode – play with Space Bots or friends in other tabs of this browser';
   $('#mode-pill').textContent = modeText;
-  $('#lobby-mode').textContent = net.kind === 'online' ? '🟢 Online' : '🟣 Local mode';
+  $('#lobby-mode').textContent = net.kind === 'online' ? '🟢 Online' : net.kind === 'p2p' ? '🟢 Online (P2P)' : '🟣 Local mode';
 
   net.onEvent((event, p) => {
     switch (event) {
