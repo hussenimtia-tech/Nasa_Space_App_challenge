@@ -2,15 +2,6 @@
  * "Live from NASA" section on the home page.
  * Data comes from our own server (/api/nasa/*), which calls NASA's public APIs:
  *   APOD · NeoWs (near-Earth objects) · Exoplanet Archive
- * Every card shows its source link, so players and judges can verify the data.
- *
- * Reliability:
- *  - each request has a timeout and is retried automatically (3 tries)
- *  - the last good answer is saved in the browser; if NASA is slow or down,
- *    the card shows the saved data instead of an error
- *  - failed cards retry again in the background every minute
- *  - cards refresh every 30 minutes, and again when the tab becomes visible
- *    after being hidden (so the daily APOD is always up to date)
  */
 (function () {
   'use strict';
@@ -40,7 +31,6 @@
     return a;
   }
 
-  // Keep the heading, replace everything else in the card.
   function reset(box) {
     while (box.children.length > 1) box.removeChild(box.lastChild);
   }
@@ -54,8 +44,6 @@
     if (err && err.message) box.appendChild(el('small', 'live-credit', '(' + err.message + ')'));
   }
 
-  // The Netlify Function (/api/nasa/*) calls NASA for us, so the NASA key stays private.
-  // window.SS_API may be "/api" or a full site URL; make sure it always ends in /api.
   var API = String(window.SS_API || '/api').replace(/\/+$/, '');
   if (!/\/api$/.test(API)) API += '/api';
 
@@ -64,10 +52,15 @@
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
     var opts = controller ? { signal: controller.signal } : {};
-    return fetch(API + path.replace(/^\/api/, ''), opts).then(function (res) {
+    
+    // Ensure accurate Netlify route targeting
+    var targetPath = path.replace(/^\/api/, '');
+    var url = API + targetPath;
+
+    return fetch(url, opts).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (!res.ok) {
-          var why = body.detail || body.message || '';
+          var why = body.detail || body.message || body.error || '';
           throw new Error('HTTP ' + res.status + (why ? ' – ' + why : ''));
         }
         return body;
@@ -85,13 +78,13 @@
   function getWithRetry(path, attempts) {
     return get(path).catch(function (err) {
       if (attempts <= 1) throw err;
-      var wait = (4 - attempts + 1) * 2000; // 2s, 4s
+      var wait = (4 - attempts + 1) * 2000;
       return new Promise(function (resolve) { setTimeout(resolve, wait); })
         .then(function () { return getWithRetry(path, attempts - 1); });
     });
   }
 
-  // ── Saved copy of the last good answer ──
+  // ── Cache Handler ──
   var CACHE_PREFIX = 'ss-nasa-';
   function saveCache(key, data) {
     try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ t: Date.now(), data: data })); } catch (e) {}
@@ -103,7 +96,6 @@
     } catch (e) { return null; }
   }
 
-  // ── Generic loader: fetch → render; on failure show saved data and retry later ──
   var retryTimers = {};
   var failCount = {};
   var rendered = {};
@@ -122,7 +114,6 @@
   function load(key, path, box, render) {
     clearTimeout(retryTimers[key]);
 
-    // 1) Show the saved copy immediately, so the card is never stuck on "Loading…".
     if (!rendered[key]) {
       var cached = readCache(key);
       if (cached) {
@@ -130,7 +121,6 @@
       }
     }
 
-    // 2) No saved copy yet and NASA is slow → say so instead of "Loading…" forever.
     var slowTimer = null;
     if (!rendered[key]) {
       slowTimer = setTimeout(function () {
@@ -138,8 +128,7 @@
       }, 6000);
     }
 
-    // 3) Fetch fresh data.
-    getWithRetry(path, 2).then(function (d) {
+    getWithRetry(path, 3).then(function (d) {
       clearTimeout(slowTimer);
       failCount[key] = 0;
       saveCache(key, d);
@@ -148,7 +137,6 @@
     }).catch(function (err) {
       clearTimeout(slowTimer);
       console.error('[nasa-live]', key, err.message || err);
-      // Keep whatever is already on screen (saved data); only show an error if there is nothing.
       if (!rendered[key]) fail(box, err);
       failCount[key] = (failCount[key] || 0) + 1;
       if (failCount[key] <= MAX_BG_RETRIES) {
@@ -159,11 +147,13 @@
 
   var number = function (n) { return Number(n).toLocaleString(); };
 
-  // ── APOD ──
+  // ── APOD Render Fix ──
   function renderApod(d) {
     reset(apodBox);
     var isVideo = (d.media_type || d.mediaType) === 'video';
-    var imgUrl = isVideo ? (d.thumbnail_url || d.thumbnail) : d.url;
+    // Fallback order for img url: url -> hdurl -> thumbnail
+    var imgUrl = isVideo ? (d.thumbnail_url || d.thumbnail) : (d.url || d.hdurl);
+    
     if (imgUrl) {
       var img = el('img', 'live-img');
       img.src = imgUrl;
@@ -172,18 +162,23 @@
       img.onerror = function () { img.style.display = 'none'; };
       apodBox.appendChild(img);
     }
+    
     apodBox.appendChild(el('h4', 'live-title', d.title || ''));
     var exp = d.explanation || '';
     var text = exp.length > 320 ? exp.slice(0, 320).replace(/\s+\S*$/, '') + '…' : exp;
     apodBox.appendChild(el('p', 'live-text', text));
     var credit = 'Credit: ' + (d.copyright ? String(d.copyright).replace(/\s+/g, ' ').trim() : 'NASA') + (d.date ? ' · ' + d.date : '');
     apodBox.appendChild(el('p', 'live-credit', credit));
-    if (isVideo && d.url) apodBox.appendChild(link(d.url, 'Watch today\u2019s video ↗'));
+    
+    if (isVideo && d.url) {
+      apodBox.appendChild(link(d.url, 'Watch today’s video ↗'));
+    }
     apodBox.appendChild(link(d.source || 'https://apod.nasa.gov/apod/astropix.html', 'Source: NASA APOD ↗'));
   }
+
   function loadApod() { load('apod', '/api/nasa/apod', apodBox, renderApod); }
 
-  // ── Near-Earth objects ──
+  // ── NeoWs Render ──
   function renderNeo(d) {
     reset(neoBox);
     neoBox.appendChild(el('p', 'live-text', number(d.count) + ' near-Earth objects are tracked today (' + d.date + '). Closest approaches:'));
@@ -201,7 +196,7 @@
   }
   function loadNeo() { load('neo', '/api/nasa/neo', neoBox, renderNeo); }
 
-  // ── Exoplanets ──
+  // ── Exoplanets Render ──
   function renderExo(d) {
     reset(exoBox);
     var wrap = el('div', 'live-table-wrap');
@@ -234,7 +229,6 @@
   loadAll();
   setInterval(loadAll, REFRESH_MS);
 
-  // Tab was in the background (e.g. phone asleep overnight) → refresh when it comes back.
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && Date.now() - lastLoad > REFRESH_MS) loadAll();
   });
