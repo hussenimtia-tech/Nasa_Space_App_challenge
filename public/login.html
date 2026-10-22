@@ -38,6 +38,11 @@
 .auth-back{display:block;margin-top:20px;text-align:center;font-size:14px}
 .auth-forgot{justify-self:end;margin-top:-6px;color:var(--ion,#5ce1ff);font-size:13px;text-decoration:none;transition:color .2s}
 .auth-forgot:hover{color:var(--sun-2,#ffd166)}
+.auth-form[hidden],.reset-step[hidden]{display:none}
+.reset-step{display:grid;gap:14px}
+.reset-title{margin:0;text-align:center;font-size:20px;color:var(--ink,#f4f1ea)}
+.reset-question{margin:0;padding:12px 14px;border-radius:14px;background:rgba(92,225,255,.08);border:1px solid rgba(92,225,255,.25);color:var(--ink,#f4f1ea);font-size:14px;line-height:1.5}
+.reset-cancel{justify-self:center;margin-top:0}
 @media (max-width:480px){.auth-screen{padding:16px}.auth-card{padding:24px 20px;border-radius:20px}}
 @media (prefers-reduced-motion:reduce){.auth-submit,.auth-form input,.auth-form select{transition:none}}
   </style>
@@ -67,6 +72,24 @@
         <button class="auth-submit" type="submit">Login to SpaceSkribble</button>
       </form>
 
+      <form id="reset-form" class="auth-form" hidden>
+        <h2 class="reset-title">Reset your password</h2>
+        <label for="reset-email">Email Address
+          <input id="reset-email" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </label>
+        <div id="reset-step2" class="reset-step" hidden>
+          <p id="reset-question" class="reset-question"></p>
+          <label for="reset-answer">Your answer
+            <input id="reset-answer" type="text" placeholder="Answer to your security question" autocomplete="off">
+          </label>
+          <label for="reset-password">New password
+            <input id="reset-password" type="password" placeholder="At least 6 characters" autocomplete="new-password" minlength="6">
+          </label>
+        </div>
+        <button class="auth-submit" id="reset-submit" type="submit">Get my security question</button>
+        <a href="#" id="reset-cancel" class="auth-forgot reset-cancel">Back to login</a>
+      </form>
+
       <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
 
       <p class="auth-footer">New player? <a href="./register.html">Create an account</a></p>
@@ -75,29 +98,85 @@
   <script src="./js/config.js"></script>
   <script src="./js/auth.js"></script>
   <script>
-  // Forgot password: uses window.requestPasswordReset(email) from auth.js
+  // Forgot password (security question flow). Uses SSAuth.api from auth.js
   (function () {
-    var link = document.getElementById('forgot-link');
-    var emailInput = document.getElementById('login-email');
+    var loginForm = document.getElementById('login-form');
+    var resetForm = document.getElementById('reset-form');
+    var forgot = document.getElementById('forgot-link');
+    var cancel = document.getElementById('reset-cancel');
     var msg = document.getElementById('auth-message');
-    link.addEventListener('click', async function (e) {
+    var rEmail = document.getElementById('reset-email');
+    var step2 = document.getElementById('reset-step2');
+    var qEl = document.getElementById('reset-question');
+    var rAns = document.getElementById('reset-answer');
+    var rPass = document.getElementById('reset-password');
+    var btn = document.getElementById('reset-submit');
+    var step = 1;
+
+    function say(t, ok) { msg.textContent = t; msg.style.color = ok ? '#06d6a0' : '#ff8a9b'; }
+    function resetUi() {
+      step = 1; step2.hidden = true; rEmail.readOnly = false;
+      rAns.value = ''; rPass.value = '';
+      btn.disabled = false; btn.textContent = 'Get my security question';
+    }
+    function show(resetMode) {
+      loginForm.hidden = resetMode; resetForm.hidden = !resetMode; say('');
+    }
+
+    forgot.addEventListener('click', function (e) {
       e.preventDefault();
-      var email = emailInput.value.trim();
-      if (!email) {
-        msg.textContent = 'Enter your email address first, then click "Forgot password?".';
-        emailInput.focus();
+      resetUi();
+      rEmail.value = document.getElementById('login-email').value.trim();
+      show(true);
+      rEmail.focus();
+    });
+    cancel.addEventListener('click', function (e) {
+      e.preventDefault();
+      resetUi(); show(false);
+    });
+
+    resetForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var api = window.SSAuth && window.SSAuth.api;
+      if (!api) return say('auth.js update kora hoy nai (SSAuth.api nei).');
+      var email = rEmail.value.trim();
+      if (!email) return say('Enter your email address.');
+
+      if (step === 1) {
+        btn.disabled = true; btn.textContent = 'Checking…';
+        say('Looking up your account… (server ghumale 30-60 sec lagte pare)', true);
+        try {
+          var d = await api('/forgot/question', { email: email });
+          qEl.textContent = d.question;
+          step2.hidden = false; rEmail.readOnly = true; step = 2;
+          btn.textContent = 'Reset password';
+          say('Answer your security question and choose a new password.', true);
+          rAns.focus();
+        } catch (err) {
+          say(err.status === 404 ? 'No account found with this email.' : err.message);
+          btn.textContent = 'Get my security question';
+        }
+        btn.disabled = false;
         return;
       }
-      if (typeof window.requestPasswordReset !== 'function') {
-        msg.textContent = 'Password reset is not connected yet.';
-        return;
-      }
-      msg.textContent = 'Sending reset link...';
+
+      var answer = rAns.value.trim();
+      var password = rPass.value;
+      if (!answer) return say('Enter your answer.');
+      if (password.length < 6) return say('Password must be at least 6 characters.');
+      btn.disabled = true; btn.textContent = 'Resetting…';
       try {
-        await window.requestPasswordReset(email);
-        msg.textContent = 'If an account exists for this email, a reset link has been sent. Check your inbox and spam folder.';
+        await api('/forgot/reset', { email: email, answer: answer, password: password });
+        say('Password changed! You can log in now.', true);
+        setTimeout(function () {
+          document.getElementById('login-email').value = email;
+          document.getElementById('login-password').value = '';
+          resetUi(); show(false);
+          say('Password changed! Log in with your new password.', true);
+        }, 1200);
       } catch (err) {
-        msg.textContent = 'Could not send the reset link. Please try again.';
+        say(err.status === 403 ? 'Wrong answer. Please try again.' : err.message);
+        btn.disabled = false; btn.textContent = 'Reset password';
       }
     });
   })();
