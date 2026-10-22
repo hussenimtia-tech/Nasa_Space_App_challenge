@@ -1,7 +1,8 @@
 /*
  * SpaceSkribble – auth flow
  * Flow: login.html -> (no account?) register.html -> auto login -> index.html
- * Works with auto-server.js (POST /register, POST /login).
+ * Works with the Netlify Function (netlify/functions/api.mjs) or auto-server.js:
+ *   POST /register, POST /login, POST /forgot/question, POST /forgot/reset
  * Token is saved in localStorage under "spaceSkribbleUser" (same key app.js / profile.js read).
  */
 (() => {
@@ -14,6 +15,7 @@
   const isLocalHost = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
 
   // js/config.js e window.SS_API set kora thakle seta, na hole sudhu localhost e :3001 use hobe.
+  // Netlify/online e SS_API khali thakle kono guess kora hobe na (guess korle "Failed to fetch" ashto).
   const API = (window.SS_API || (isLocalHost ? 'http://localhost:3001' : '')).replace(/\/+$/, '');
 
   const file = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
@@ -115,11 +117,12 @@
     if (label) btn.textContent = label;
   }
 
+  // Render free plan e server ghumiye thakle prothom request e 30-60 sec lagte pare, tai timeout boro.
   const TIMEOUT_MS = 60000;
 
   async function api(path, body) {
     if (!API) {
-      throw new Error('Server URL set kora nai. js/config.js e window.SS_API te URL boshao.');
+      throw new Error('Server URL set kora nai. js/config.js e window.SS_API te tomar hosted server er URL boshao.');
     }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -139,7 +142,7 @@
       throw new Error(
         isLocalHost
           ? 'Cannot reach the server. Start it with: node auto-server.js (port 3001).'
-          : 'Server e connect hocche na. Ektu pore abar try koro.'
+          : 'Server e connect hocche na. Server ta cholche kina ar CORS allow kora ache kina check koro.'
       );
     }
     clearTimeout(timer);
@@ -162,7 +165,7 @@
       const password = $('login-password').value;
       if (!email || !password) return say('Enter your email and password.');
       busy(loginForm, true, 'Logging in…');
-      say('Checking your account…', true);
+      say('Checking your account… (server ghumale 30-60 sec lagte pare)', true);
       try {
         const data = await api('/login', { email, password });
         saveUser(data.token, data.user);
@@ -190,7 +193,7 @@
       if (!name || !email || !password || !question || !answer) return say('Fill in all fields.');
       if (password.length < 6) return say('Password must be at least 6 characters.');
       busy(regForm, true, 'Creating account…');
-      say('Creating your account…', true);
+      say('Creating your account… (server ghumale 30-60 sec lagte pare)', true);
       try {
         await api('/register', { name, email, password, question, answer });
         say('Account created! Logging you in…', true);
@@ -218,5 +221,6 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 
-  window.SSAuth = { getUser, logout, saveUser };
+  // `api` is exported so login.html can call /forgot/question and /forgot/reset (password reset).
+  window.SSAuth = { getUser, logout, saveUser, api };
 })();
