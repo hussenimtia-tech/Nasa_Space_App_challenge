@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/extras.css" />
 </head>
 <body>
   <canvas id="starfield" aria-hidden="true"></canvas>
@@ -25,64 +26,121 @@
         </a>       
 
 <div class="topnav-links">
-  <a href="#objects">Objects</a>
-  <a href="#gravity">Gravity Lab</a>
-  <a href="#distances">Distances</a>
+  <a href="#live" data-i18n="nav.live">NASA Live</a>
+  <a href="#missions" data-i18n="nav.missions">Missions</a>
+  <a href="#objects" data-i18n="nav.objects">Objects</a>
+  <a href="#gravity" data-i18n="nav.gravity">Gravity Lab</a>
+  <a href="#distances" data-i18n="nav.distances">Distances</a>
 
-  <button class="link-btn" data-open="modal-howto">
-    How to Play
-  </button>
+  <button class="link-btn" data-open="modal-howto" data-i18n="nav.howto">How to Play</button>
 
-  <a href="./profile.html" id="profile-link" class="user-profile-button"
-     title="My Profile" hidden>
+  <a href="./profile.html" id="profile-link" class="user-profile-button" title="My Profile" hidden>
     <img id="navProfileAvatar" src="./default-avatar.svg" alt="My Profile">
   </a>
-<a href="./login.html" class="link-btn" id="login-link">
-  Log In
-</a>
-
-<a href="./register.html" class="link-btn" id="register-link">
-  Register
-</a>
-
+  <a href="./login.html" class="link-btn" id="login-link">Log In</a>
+  <a href="./register.html" class="link-btn" id="register-link">Register</a>
+  <button class="link-btn" id="logout-button" type="button" data-i18n="nav.logout">Log out</button>
 </div>
 
       </nav>
       <div class="hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="pulse"></span> NASA Sky Challenge</p>
-          <h1>Draw the <em>cosmos</em>.<br />Guess the sky.</h1>
-          <p class="lede">A multiplayer drawing game for space explorers. Sketch Saturn, the Orion Nebula or the ISS while your crew races to guess — then unlock a real NASA fact card every round.</p>
+          <p class="eyebrow"><span class="pulse"></span> <span data-i18n="hero.eyebrow">NASA Sky Challenge</span></p>
+          <h1 data-i18n-html="hero.title">Draw the <em>cosmos</em>.<br />Guess the sky.</h1>
+          <p class="lede" data-i18n="hero.lede">A multiplayer drawing game for space explorers. Sketch Saturn, the Orion Nebula or the ISS while your crew races to guess — then unlock a real NASA fact card every round.</p>
           <ul class="hero-stats">
-            <li><strong id="stat-objects">20</strong><span>space objects</span></li>
-            <li><strong>60s</strong><span>per drawing</span></li>
-            <li><strong>9.8</strong><span>m/s² on Earth</span></li>
+            <li><strong id="stat-objects">20</strong><span data-i18n="hero.stat1">space objects</span></li>
+            <li><strong>60s</strong><span data-i18n="hero.stat2">per drawing</span></li>
+            <li><strong>9.8</strong><span data-i18n="hero.stat3">m/s² on Earth</span></li>
           </ul>
         </div>
 
         <form class="join-card glass" id="join-form" autocomplete="off">
-          <h2>Launch a mission</h2>
+          <h2 data-i18n="join.title">Launch a mission</h2>
           <label class="field">
-            <span>Your astronaut name</span>
+            <span data-i18n="join.name">Your astronaut name</span>
             <input id="name-input" maxlength="16" placeholder="e.g. Captain Nova" required />
           </label>
           <div class="field">
-            <span>Pick your avatar</span>
+            <span data-i18n="join.avatar">Pick your avatar</span>
             <div class="avatar-picker" id="avatar-picker" role="radiogroup" aria-label="Avatar"></div>
           </div>
           <button type="button" class="btn btn-primary btn-lg" id="create-btn">
-            <span aria-hidden="true">🚀</span> Create Room
+            <span aria-hidden="true">🚀</span> <span data-i18n="join.create">Create Room</span>
           </button>
-          <div class="or"><span>or join with a code</span></div>
+          <div class="or"><span data-i18n="join.or">or join with a code</span></div>
           <div class="join-row">
             <input id="code-input" maxlength="5" placeholder="ROOM CODE" aria-label="Room code" />
-            <button type="button" class="btn btn-secondary" id="join-btn">Join Room</button>
+            <button type="button" class="btn btn-secondary" id="join-btn" data-i18n="join.join">Join Room</button>
           </div>
           <p class="mode-pill" id="mode-pill"></p>
-          <button type="button" class="link-btn small" data-open="modal-howto">How to Play →</button>
+          <button type="button" class="link-btn small" data-open="modal-howto" data-i18n="join.howto">How to Play →</button>
         </form>
       </div>
     </header>
+
+<!-- Live NASA data (served by /api/nasa/*) -->
+<section class="section live-nasa" id="live">
+  <div class="section-head">
+    <p class="eyebrow" data-i18n="live.eyebrow">LIVE FROM NASA</p>
+    <h2 data-i18n-html="live.title">Today's <em>real</em> space</h2>
+    <p data-i18n="live.sub">Everything below is fetched right now from NASA's official public APIs.</p>
+  </div>
+  <div class="live-grid">
+    <article class="live-card live-apod" id="live-apod" aria-live="polite">
+      <h3 data-i18n="live.apod">Astronomy Picture of the Day</h3>
+      <p class="live-status" data-i18n="live.loading">Loading data from NASA…</p>
+    </article>
+    <article class="live-card" id="live-neo" aria-live="polite">
+      <h3 data-i18n="live.neo">Asteroids passing Earth today</h3>
+      <p class="live-status" data-i18n="live.loading">Loading data from NASA…</p>
+    </article>
+    <article class="live-card live-wide" id="live-exo" aria-live="polite">
+      <h3 data-i18n="live.exo">Newest confirmed exoplanets</h3>
+      <p class="live-status" data-i18n="live.loading">Loading data from NASA…</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ MISSIONS: Classroom · Citizen Science · Adaptive Revision · AR Sky ============ -->
+<section class="section missions" id="missions">
+  <div class="section-head">
+    <p class="eyebrow" data-i18n="ms.eyebrow">LEARN · PLAY · DISCOVER</p>
+    <h2 data-i18n-html="ms.title">Missions beyond <em>drawing</em></h2>
+    <p data-i18n="ms.sub">For classrooms, citizen science, smart revision and looking at the real sky.</p>
+  </div>
+  <div class="ms-grid">
+    <article class="ms-card">
+      <div class="ms-icon" aria-hidden="true">🏫</div>
+      <h3 data-i18n="ms.class">Classroom Mode</h3>
+      <p data-i18n="ms.class.p">Teachers pick topics and share an assignment link. Students take the quiz and send back a report code; the teacher sees the whole class.</p>
+      <button type="button" class="btn btn-secondary" data-ms="class" data-i18n="ms.open">Open</button>
+    </article>
+    <article class="ms-card">
+      <div class="ms-icon" aria-hidden="true">🔭</div>
+      <h3 data-i18n="ms.sci">Citizen Science Mission</h3>
+      <p data-i18n="ms.sci.p">Look at real NASA images and classify them, such as galaxy shapes or Moon craters.</p>
+      <button type="button" class="btn btn-secondary" data-ms="science" data-i18n="ms.open">Open</button>
+    </article>
+    <article class="ms-card">
+      <div class="ms-icon" aria-hidden="true">🧠</div>
+      <h3 data-i18n="ms.rev">Adaptive Revision</h3>
+      <p data-i18n="ms.rev.p">We remember the topics you miss and build a revision round around them.</p>
+      <button type="button" class="btn btn-secondary" data-ms="revise" data-i18n="ms.open">Open</button>
+    </article>
+    <article class="ms-card">
+      <div class="ms-icon" aria-hidden="true">📱</div>
+      <h3 data-i18n="ms.ar">AR Sky Mode</h3>
+      <p data-i18n="ms.ar.p">Point your phone camera at the sky and see labels for the Sun, Moon and planets that are above you right now.</p>
+      <button type="button" class="btn btn-secondary" data-ms="ar" data-i18n="ms.open">Open</button>
+    </article>
+  </div>
+</section>
+
+<dialog class="modal ss-modal" id="modal-ms-class"><form method="dialog"><button class="close" aria-label="Close">✕</button></form><div class="ms-body" id="ms-body-class"></div></dialog>
+<dialog class="modal ss-modal" id="modal-ms-science"><form method="dialog"><button class="close" aria-label="Close">✕</button></form><div class="ms-body" id="ms-body-science"></div></dialog>
+<dialog class="modal ss-modal" id="modal-ms-revise"><form method="dialog"><button class="close" aria-label="Close">✕</button></form><div class="ms-body" id="ms-body-revise"></div></dialog>
+<dialog class="modal ss-modal ss-wide" id="modal-ms-ar"><form method="dialog"><button class="close" aria-label="Close">✕</button></form><div class="ms-body" id="ms-body-ar"></div></dialog>
 
 <!-- Explore Space & Earth -->
 <section class="section explore-section" id="explore">
@@ -454,6 +512,9 @@
 
   <!-- Socket.IO is served by server.js. On static hosting it fails to load and the game uses local mode. -->
   <script src="/socket.io/socket.io.js" onerror="window.__noSocket = true"></script>
+  <script src="/js/config.js"></script>
+  <!-- PeerJS (WebRTC): cross-device rooms on Netlify without a game server -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="/data/spaceObjects.js"></script>
   <script src="/engine.js"></script>
   <script src="/app.js"></script>
@@ -475,6 +536,9 @@
 })();
 </script>
 <script src="/js/auth.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/nasa-live.js"></script>
+<script src="/js/missions.js"></script>
 
 <!-- ================= NOVA AI PREMIUM CHATBOT ================= -->
 <link rel="stylesheet" href="./nova-chatbot.css" />
